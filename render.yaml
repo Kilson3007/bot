@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: agente077-bot
+    env: node
+    buildCommand: npm install
+    startCommand: node bot.js
+    nodeVersion: 16
+    envVars:
+      - key: GEMINI_API_KEY
+        value: AIzaSyBNi9lwXlEG7DLZdCAywwMsv2kIrPjcUSU
+      - key: GEMINI_MODEL
+        value: gemini-1.5-flash
+      - key: GRUPO_ID
+        value: 120363236671730157@g.us
+      - key: ANALISE_IMAGENS
+        value: true
+      - key: MONITORAMENTO_ATIVO
+        value: true
+      - key: ENVIO_AUTOMATICO
+        value: true
+      - key: LIMITE_IMAGENS_DIA
+        value: 20
+      - key: HORARIO_RELATORIO_PARCIAL
+        value: '13:00'
+      - key: HORARIO_RELATORIO_COMPLETO
+        value: '00:00'
+      - key: PORT
+        value: 3000
+      - key: EMAIL_NOTIFICACAO
+        value: joaquimpascoal1999@gmail.com
+      - key: EMAIL_REMETENTE
+        value: jpascoal167@gmail.com
+      - key: EMAIL_SENHA
+        value: wfluiscajcfziknd
+      - key: NODE_ENV
+        value: production
+      - key: URL_RENDER
+        value: https://bot-2epv.onrender.com 
