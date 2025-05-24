@@ -67,7 +67,7 @@ client.on('qr', async (qr) => {
     qrcode.generate(qr, { small: true });
     console.log('\n');
     
-    // Salva o QR code como texto para ser enviado por email ou acessado via web
+    // Imprime o texto do QR code completo para ser copiado do terminal
     console.log('TEXTO DO QR CODE (use para gerar em um gerador online):');
     console.log(qr);
     console.log('\n');
@@ -83,6 +83,11 @@ client.on('qr', async (qr) => {
         
         // Armazena o texto do QR code em uma variável global para acesso pelo servidor
         global.qrCodeText = qr;
+        
+        // Imprime o QR code nos logs de forma clara para facilitar a cópia
+        console.log('\n\n========== TEXTO DO QR CODE FORMATADO ==========');
+        console.log(qr);
+        console.log('================================================\n\n');
         
         // Envia o email apenas com o texto do QR code
         try {
