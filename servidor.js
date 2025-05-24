@@ -60,13 +60,29 @@ const server = http.createServer((req, res) => {
         // Verifica se temos o texto do QR code
         const qrCodeText = global.qrCodeText || '';
         
+        // Tenta ler o texto do arquivo se não estiver na memória
+        let qrCodeTextFromFile = '';
+        try {
+            const tempDir = process.env.NODE_ENV === 'production' ? '/tmp' : __dirname;
+            const qrCodeTextPath = path.join(tempDir, 'qrcode_atual.txt');
+            
+            if (fs.existsSync(qrCodeTextPath)) {
+                qrCodeTextFromFile = fs.readFileSync(qrCodeTextPath, 'utf8');
+            }
+        } catch (error) {
+            console.error('Erro ao ler arquivo de texto do QR code:', error);
+        }
+        
+        // Usa o texto da memória ou do arquivo
+        const finalQrCodeText = qrCodeText || qrCodeTextFromFile || '';
+        
         // Determina qual conteúdo mostrar na página
         let qrContent = '';
         
         if (qrCodeExiste) {
             // Se a imagem existe, mostramos ela
             qrContent = `<img src="/qrcode?t=${Date.now()}" alt="QR Code para escanear" class="qr-image">`;
-        } else if (qrCodeText) {
+        } else if (finalQrCodeText) {
             // Se não temos a imagem mas temos o texto, mostramos instruções
             qrContent = `
                 <div class="text-instructions">
@@ -74,19 +90,32 @@ const server = http.createServer((req, res) => {
                     
                     <ol>
                         <li>Copie o texto do QR code abaixo</li>
-                        <li>Acesse um gerador online como <a href="https://www.the-qrcode-generator.com/" target="_blank">este site</a></li>
+                        <li>Acesse um gerador online como <a href="https://www.the-qrcode-generator.com/" target="_blank">este site</a> ou <a href="https://www.qr-code-generator.com/" target="_blank">este outro</a></li>
                         <li>Cole o texto, gere o QR code e escaneie com o WhatsApp</li>
                     </ol>
                     
                     <div class="qr-text-container">
-                        <textarea id="qrCodeText" readonly>${qrCodeText}</textarea>
+                        <textarea id="qrCodeText" readonly>${finalQrCodeText}</textarea>
                         <button onclick="copyQRText()" class="copy-button">Copiar</button>
+                    </div>
+                    
+                    <div class="direct-links">
+                        <p><strong>Links diretos para geradores:</strong></p>
+                        <a href="https://www.qrcode-monkey.com/#text" class="generator-link" target="_blank">QRCode Monkey</a>
+                        <a href="https://www.qr-code-generator.com/" class="generator-link" target="_blank">QR Code Generator</a>
+                        <a href="https://www.the-qrcode-generator.com/" class="generator-link" target="_blank">The QR Code Generator</a>
+                    </div>
+                    
+                    <div class="direct-qr">
+                        <p><strong>QR Code gerado diretamente:</strong></p>
+                        <p class="note">Se o QR code abaixo aparecer, você pode escaneá-lo diretamente:</p>
+                        <div id="qrcode-container"></div>
                     </div>
                 </div>
             `;
         } else {
             // Se não temos nem imagem nem texto
-            qrContent = '<p>QR Code não disponível no momento.</p>';
+            qrContent = '<p>QR Code não disponível no momento. Tente recarregar a página em alguns segundos.</p>';
         }
         
         const html = `
@@ -196,7 +225,40 @@ const server = http.createServer((req, res) => {
                 .copy-button:hover {
                     background-color: #43a047;
                 }
+                .direct-links {
+                    margin-top: 20px;
+                    padding: 10px;
+                    background-color: #e3f2fd;
+                    border-radius: 5px;
+                }
+                .generator-link {
+                    display: inline-block;
+                    margin: 5px 10px;
+                    padding: 8px 15px;
+                    background-color: #2196f3;
+                    color: white;
+                    text-decoration: none;
+                    border-radius: 4px;
+                }
+                .generator-link:hover {
+                    background-color: #0b7dda;
+                }
+                .direct-qr {
+                    margin-top: 20px;
+                    padding: 15px;
+                    background-color: #f1f8e9;
+                    border-radius: 5px;
+                }
+                .note {
+                    font-size: 14px;
+                    color: #666;
+                }
+                #qrcode-container {
+                    margin: 20px auto;
+                    max-width: 256px;
+                }
             </style>
+            <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
         </head>
         <body>
             <div class="container">
@@ -206,10 +268,10 @@ const server = http.createServer((req, res) => {
                     ${qrContent}
                 </div>
                 
-                <div class="status ${qrCodeExiste || qrCodeText ? 'available' : 'unavailable'}">
+                <div class="status ${qrCodeExiste || finalQrCodeText ? 'available' : 'unavailable'}">
                     ${qrCodeExiste ? 
                         'QR Code disponível! Escaneie usando o WhatsApp em seu celular.' : 
-                        qrCodeText ? 
+                        finalQrCodeText ? 
                         'QR Code disponível como texto. Siga as instruções acima.' :
                         'QR Code não está disponível. Aguarde ou reinicie o bot.'}
                 </div>
@@ -238,6 +300,32 @@ const server = http.createServer((req, res) => {
                     document.execCommand('copy');
                     alert('Texto do QR code copiado para a área de transferência!');
                 }
+                
+                // Tenta gerar o QR code diretamente no navegador
+                document.addEventListener('DOMContentLoaded', function() {
+                    const qrText = document.getElementById('qrCodeText');
+                    const qrContainer = document.getElementById('qrcode-container');
+                    
+                    if (qrText && qrContainer && window.QRCode) {
+                        try {
+                            // Limpa o container antes de gerar um novo QR code
+                            qrContainer.innerHTML = '';
+                            
+                            // Gera o QR code
+                            new QRCode(qrContainer, {
+                                text: qrText.value,
+                                width: 256,
+                                height: 256,
+                                colorDark: "#000000",
+                                colorLight: "#ffffff",
+                                correctLevel: QRCode.CorrectLevel.H
+                            });
+                        } catch (error) {
+                            console.error('Erro ao gerar QR code no navegador:', error);
+                            qrContainer.innerHTML = '<p>Não foi possível gerar o QR code no navegador.</p>';
+                        }
+                    }
+                });
                 
                 // Atualiza a página a cada 10 segundos
                 setTimeout(() => {
@@ -282,6 +370,139 @@ const server = http.createServer((req, res) => {
             console.error('Erro ao acessar texto do QR Code:', error);
             res.writeHead(500, { 'Content-Type': 'text/plain' });
             res.end('Erro ao acessar texto do QR Code: ' + error.message);
+            return;
+        }
+    }
+    
+    // Rota para visualizar QR code simples em HTML
+    if (req.url === '/qrsimples') {
+        try {
+            // Tenta obter o texto do QR code
+            let qrCodeText = global.qrCodeText || '';
+            
+            if (!qrCodeText) {
+                // Se não temos na memória, tenta ler do arquivo
+                const tempDir = process.env.NODE_ENV === 'production' ? '/tmp' : __dirname;
+                const qrCodeTextPath = path.join(tempDir, 'qrcode_atual.txt');
+                
+                if (fs.existsSync(qrCodeTextPath)) {
+                    qrCodeText = fs.readFileSync(qrCodeTextPath, 'utf8');
+                }
+            }
+            
+            if (!qrCodeText) {
+                res.writeHead(404, { 'Content-Type': 'text/plain' });
+                res.end('QR Code não disponível no momento');
+                return;
+            }
+            
+            // Cria uma página HTML simples
+            const html = `
+            <!DOCTYPE html>
+            <html lang="pt-BR">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>QR Code Simples</title>
+                <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+                <style>
+                    body {
+                        font-family: Arial, sans-serif;
+                        text-align: center;
+                        padding: 20px;
+                        background-color: #ffffff;
+                    }
+                    #qrcode {
+                        margin: 20px auto;
+                        max-width: 300px;
+                        background-color: white;
+                        padding: 15px;
+                        border-radius: 8px;
+                        box-shadow: 0 0 10px rgba(0,0,0,0.1);
+                    }
+                    .texto {
+                        margin-top: 20px;
+                        padding: 10px;
+                        background-color: #f5f5f5;
+                        border-radius: 5px;
+                        font-family: monospace;
+                        text-align: left;
+                        white-space: pre-wrap;
+                        word-break: break-all;
+                        font-size: 12px;
+                        margin-bottom: 20px;
+                    }
+                    h1 {
+                        font-size: 24px;
+                        color: #333;
+                    }
+                    .instrucoes {
+                        background-color: #e8f5e9;
+                        padding: 15px;
+                        border-radius: 5px;
+                        text-align: left;
+                        margin: 20px 0;
+                    }
+                    .instrucoes ol {
+                        margin-left: 20px;
+                        padding-left: 0;
+                    }
+                    .nota {
+                        font-size: 12px;
+                        color: #666;
+                        margin-top: 30px;
+                    }
+                </style>
+            </head>
+            <body>
+                <h1>QR Code para WhatsApp</h1>
+                
+                <div class="instrucoes">
+                    <h3>Como conectar:</h3>
+                    <ol>
+                        <li>Abra o WhatsApp no seu celular</li>
+                        <li>Toque em Menu ou Configurações</li>
+                        <li>Selecione "Dispositivos Conectados"</li>
+                        <li>Toque em "Conectar um Dispositivo"</li>
+                        <li>Aponte a câmera para o QR Code abaixo</li>
+                    </ol>
+                </div>
+                
+                <div id="qrcode"></div>
+                
+                <p>Se o QR code acima não funcionar, use o texto abaixo:</p>
+                <div class="texto">${qrCodeText}</div>
+                
+                <p class="nota">Esta página será atualizada automaticamente a cada 15 segundos</p>
+                
+                <script>
+                    document.addEventListener('DOMContentLoaded', function() {
+                        var qrcode = new QRCode(document.getElementById("qrcode"), {
+                            text: "${qrCodeText.replace(/"/g, '\\"')}",
+                            width: 256,
+                            height: 256,
+                            colorDark: "#000000",
+                            colorLight: "#ffffff",
+                            correctLevel: QRCode.CorrectLevel.H
+                        });
+                    });
+                    
+                    // Atualiza a página a cada 15 segundos
+                    setTimeout(function() {
+                        window.location.reload();
+                    }, 15000);
+                </script>
+            </body>
+            </html>
+            `;
+            
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+            res.end(html);
+            return;
+        } catch (error) {
+            console.error('Erro ao gerar página QR simples:', error);
+            res.writeHead(500, { 'Content-Type': 'text/plain' });
+            res.end('Erro ao gerar página QR simples: ' + error.message);
             return;
         }
     }
@@ -334,6 +555,20 @@ const server = http.createServer((req, res) => {
             (prodFallbackPath && fs.existsSync(prodFallbackPath));
     } catch (error) {
         console.error('Erro ao verificar QR code:', error);
+    }
+    
+    // Verifica se temos o texto do QR code
+    let textoQRExiste = false;
+    try {
+        textoQRExiste = !!global.qrCodeText;
+        
+        if (!textoQRExiste) {
+            const tempDir = process.env.NODE_ENV === 'production' ? '/tmp' : __dirname;
+            const qrCodeTextPath = path.join(tempDir, 'qrcode_atual.txt');
+            textoQRExiste = fs.existsSync(qrCodeTextPath);
+        }
+    } catch (error) {
+        console.error('Erro ao verificar texto do QR code:', error);
     }
     
     // Cria a página HTML de status
@@ -407,12 +642,52 @@ const server = http.createServer((req, res) => {
             .button-warning {
                 background: #ff9800;
             }
+            .button-danger {
+                background: #f44336;
+            }
             .button:hover {
                 opacity: 0.9;
             }
             .buttons-container {
                 text-align: center;
                 margin: 20px 0;
+            }
+            .qr-options-card {
+                background-color: #fff3e0;
+                border-radius: 5px;
+                padding: 15px;
+                margin-bottom: 20px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                border-left: 4px solid #ff9800;
+            }
+            .qr-options-title {
+                color: #e65100;
+                margin-top: 0;
+            }
+            .qr-options-list {
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: center;
+                gap: 10px;
+                margin-top: 15px;
+            }
+            .small-button {
+                padding: 8px 12px;
+                background-color: #2196f3;
+                color: white;
+                text-decoration: none;
+                border-radius: 4px;
+                font-size: 14px;
+                display: inline-block;
+            }
+            .small-button:hover {
+                background-color: #0b7dda;
+            }
+            .note {
+                font-size: 13px;
+                color: #666;
+                font-style: italic;
+                margin-top: 10px;
             }
         </style>
     </head>
@@ -439,14 +714,30 @@ const server = http.createServer((req, res) => {
                 <strong>Iniciado em:</strong> ${inicioServidor.toLocaleString()}
             </div>
             <div class="status-item">
-                <strong>QR Code disponível:</strong> ${qrCodeExiste ? '✅ Sim' : '❌ Não'}
+                <strong>QR Code disponível:</strong> ${qrCodeExiste || textoQRExiste ? '✅ Sim' : '❌ Não'}
             </div>
         </div>
         
+        ${(qrCodeExiste || textoQRExiste) ? `
+        <div class="qr-options-card">
+            <h3 class="qr-options-title">📱 Opções de QR Code para WhatsApp</h3>
+            <p>O QR code está disponível para escanear. Escolha uma das opções abaixo:</p>
+            
+            <div class="qr-options-list">
+                <a href="/scan" class="small-button">🔍 QR Code Completo</a>
+                <a href="/qrsimples" class="small-button">🔄 QR Code Simples</a>
+                <a href="/qrtext" class="small-button" target="_blank">📋 Texto do QR Code</a>
+            </div>
+            
+            <p class="note">Dica: Se uma opção não funcionar, tente outra. A página do QR Code Simples geralmente é a mais confiável.</p>
+        </div>
+        ` : ''}
+        
         <div class="buttons-container">
-            <a href="/scan" class="button ${qrCodeExiste ? 'button-warning' : ''}">${qrCodeExiste ? '⚠️ Escanear QR Code' : 'Verificar QR Code'}</a>
-            <a href="/qrtext" class="button button-warning" target="_blank">📋 Obter Texto do QR Code</a>
             <a href="/" class="button">🔄 Atualizar Status</a>
+            <a href="/scan" class="button ${qrCodeExiste || textoQRExiste ? 'button-warning' : ''}">
+                ${qrCodeExiste || textoQRExiste ? '⚠️ Escanear QR Code' : 'Verificar QR Code'}
+            </a>
         </div>
         
         <div class="status-card">
